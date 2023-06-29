@@ -1,0 +1,35 @@
+{
+    "name": "Watchmachine | Plugin",
+    "version": "1.0.1",
+    "description": "Mandatory addition for the correct operation of the WatchMachine service.",
+    "permissions": [
+        "tabs",
+        "webRequest",
+        "contextMenus",
+        "scripting",
+        "activeTab",
+        "storage"
+    ],
+    "host_permissions": [
+        "https://*.youtube.com/*",
+        "https://watchmachine.win/*",
+        "https://watchmachine.onrender.com/*",
+        "https://youtu.be/*"
+    ],
+    "minimum_chrome_version": "92",
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["contentScript.js"]
+        }
+    ],
+    "action": {
+        "default_icon": "icon.png",
+        "default_title": "WatchMachine | Plugin"
+    },
+    "manifest_version": 3
+}
