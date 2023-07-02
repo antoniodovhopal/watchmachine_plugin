@@ -61,21 +61,6 @@ const fetchVideo = async (sid, tabId) => {
     } catch {
         return {success: false}
     }
-    // .then((res) => res.json())
-    // .then((data) => {
-    //     if (data.success) {
-
-    //         // chrome.storage.local.set({videoId: data.info.videoId, source: data.info.source}, function() {
-    //         //     updateTab(tabId, data.info.videoId, data.info.source)
-    //         // })
-    //     }
-    //     else {
-    //         // removeSession(tabId)
-    //     }
-    // })
-    // .catch(() => {
-    //     // removeSession(tabId)
-    // })
 }
 
 const clearCash = () => {
@@ -95,7 +80,11 @@ const clearCash = () => {
 const continueSession = async (sid, tid, wid, start=false) => {
     clearCash()
     const result = await fetchVideo(sid, tid)
-    if (!result.success) removeSession(tid)
+    if (!result.success) {
+        closeTabs(wid, tid)
+        removeSession(tid)
+        return
+    }
     const storageObj = {}
     storageObj[tid] = {
         sid, wid,
