@@ -1,6 +1,6 @@
 {
     "name": "Watchmachine | Plugin",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Mandatory addition for the correct operation of the WatchMachine service.",
     "permissions": [
         "tabs",
@@ -14,7 +14,9 @@
         "https://*.youtube.com/*",
         "https://watchmachine.win/*",
         "https://watchmachine.onrender.com/*",
-        "https://youtu.be/*"
+        "https://youtu.be/*",
+        "http://localhost:3000/*",
+        "http://localhost:5000/*"
     ],
     "minimum_chrome_version": "92",
     "background": {
