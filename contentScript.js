@@ -1,6 +1,6 @@
 
-const VERSION_ID = 'psocmjfyer'
-const HOSTNAME = 'watchmachine.win'
+const VERSION_ID = 'laksnjqehc'
+const HOSTNAME = 'localhost'
 
 const detectPlugin = () => {
     const pluginDetector = document.querySelector('.plugin-detector')

@@ -4,8 +4,8 @@ const CLEARED_CASH_DELAY = 10 * 60
 const SILENCE_DELAY = 5 * 60
 const MEDIA_DELAY = 5
 
-const CLIENT_URL = 'https://watchmachine.win'
-const API_URL = 'https://watchmachine.onrender.com'
+const CLIENT_URL = 'http://localhost:3000'
+const API_URL = 'http://localhost:5000'
 const HOSTNAME = API_URL.split('://')[1].split('/')[0].split('.').slice(-2)[0]
 
 const breakAll = () => {
@@ -21,7 +21,6 @@ const closeTabs = (windowId, tabId) => {
     chrome.tabs.query({ windowId: parseInt(windowId) }, function(tabs) {
         tabs.forEach(function(tab) {
             if (tab.id !== parseInt(tabId)) {
-                console.log(windowId, tabId)
                 chrome.tabs.remove(tab.id)
             }
         })
@@ -43,7 +42,7 @@ const updateTab = (tid, vid, source) => {
     }, MEDIA_DELAY * 1000)
 }
 
-const fetchVideo = async (sid, tabId) => {
+const fetchVideo = async (sid) => {
     try {
         const res = await fetch(API_URL + '/plugin/yt/', {
             method: 'GET',
@@ -119,7 +118,7 @@ const getGroupedData = (packages) => {
 
 const init = (tab) => {
     try {
-        const {url, tabId} = tab
+        const {url, tabId, requestHeaders} = tab
         if (tabId <= 0) return
         const hostname = url.split('://')[1].split('/')[0].split('.').slice(-2)[0]
         const type = url.split('?')[0].split('/').slice(-1)[0]
@@ -127,67 +126,78 @@ const init = (tab) => {
         const params = new URLSearchParams(paramsSTR)
         const tabIdSTR = tabId.toString()
 
-            if (hostname === HOSTNAME && type === 'start') {
-                chrome.windows.create({url: 'https://youtube.com/', state: 'maximized'}, function(window) {
-                    const windowId = window.id
-                    const tabId = window.tabs[0].id
-                    continueSession(params.get('sid'), tabId.toString(), windowId.toString(), true)
-                })
-            }
-            else if(hostname === HOSTNAME && type === 'break') {
-                chrome.storage.local.get(null, function(res) {
-                    const tabToRemove = Object.keys(res).find((key) => res[key].sid === params.get('sid'))
-                    if (tabToRemove) removeSession(tabToRemove)
-                })
-            }
-            else if (hostname === 'youtube') {
-                chrome.storage.local.get(null, function(res) {
-                    if (type === 'playback' && params.get('euri') === CLIENT_URL + '/') {
-                        fetch(API_URL + '/plugin/yt', {
-                            method: 'POST',
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({params: paramsSTR})
-                        })
-                        .finally(() => {
-                            chrome.tabs.sendMessage(parseInt(tabIdSTR), {type: 'load'})
-                        })
-                    } else if (!!res[tabIdSTR] && type.includes('unavailable_video')) {
-                        continueSession(res[tabIdSTR].sid, tabIdSTR, res[tabIdSTR].wid)
-                    } else if (!!res[tabIdSTR]) {
-                        const request = {type, params: paramsSTR, timestamp: Date.now()}
-                        const obj = res[tabIdSTR]
-                        const requests = obj.packages
-                        requests.push(request)
-                        obj['packages'] = requests
-                        const storageObj = {}
-                        storageObj[tabIdSTR] = obj
-                        chrome.storage.local.set(storageObj, function() {
-                            if (params.get('vps') && params.get('vps').split(':').slice(-1)[0] === 'EN' && params.get('el') === 'detailpage') {
-                                chrome.tabs.update(parseInt(tabIdSTR), {url: 'https://youtube.com/'})
-                                const groupedData = getGroupedData(obj.packages)
-                                Object.keys(groupedData).forEach((gType) => {
-                                    fetch(API_URL + '/plugin/yt/' + gType, {
-                                        method: 'PUT',
-                                        headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
-                                        body: JSON.stringify({packages: groupedData[gType]})
-                                    })
-                                    .catch(null)
+        if (hostname === HOSTNAME && type === 'start') {
+            chrome.windows.create({url: 'https://youtube.com/', state: 'maximized'}, function(window) {
+                const windowId = window.id
+                const tabId = window.tabs[0].id
+                continueSession(params.get('sid'), tabId.toString(), windowId.toString(), true)
+            })
+        }
+        else if(hostname === HOSTNAME && type === 'break') {
+            chrome.storage.local.get(null, function(res) {
+                const tabToRemove = Object.keys(res).find((key) => res[key].sid === params.get('sid'))
+                if (tabToRemove) removeSession(tabToRemove)
+            })
+        }
+        else if (hostname === 'youtube') {
+            chrome.storage.local.get(null, function(res) {
+                if (type === 'playback' && params.get('euri') === CLIENT_URL + '/') {
+                    fetch(API_URL + '/plugin/yt', {
+                        method: 'POST',
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({params: paramsSTR})
+                    })
+                    .finally(() => {
+                        chrome.tabs.sendMessage(parseInt(tabIdSTR), {type: 'load'})
+                    })
+                } else if (!!res[tabIdSTR] && type.includes('unavailable_video')) {
+                    continueSession(res[tabIdSTR].sid, tabIdSTR, res[tabIdSTR].wid)
+                } else if (!!res[tabIdSTR]) {
+                    const request = {type, params: paramsSTR, timestamp: Date.now()}
+                    const obj = res[tabIdSTR]
+                    const requests = obj.packages
+                    requests.push(request)
+                    obj['packages'] = requests
+                    const storageObj = {}
+                    storageObj[tabIdSTR] = obj
+                    chrome.storage.local.set(storageObj, function() {
+                        if (params.get('vps') && params.get('vps').split(':').slice(-1)[0] === 'EN' && params.get('el') === 'detailpage') {
+                            chrome.tabs.update(parseInt(tabIdSTR), {url: 'https://youtube.com/'})
+                            const groupedData = getGroupedData(obj.packages)
+                            Object.keys(groupedData).forEach((gType) => {
+                                fetch(API_URL + '/plugin/yt/' + gType, {
+                                    method: 'PUT',
+                                    headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
+                                    body: JSON.stringify({packages: groupedData[gType], headers: requestHeaders})
                                 })
-                                setTimeout(() => continueSession(obj.sid, tabIdSTR, obj.wid), DELAY * 1000)
-                            } else if (params.get('idpj') && params.get('ldpj') && params.get('el') === 'adunit' && params.get('st') === '0') {
-                                updateTab(tabIdSTR, res[tabIdSTR].videoId, res[tabIdSTR].source)
-                            }
-                        })
-                    }
-                })
-            }
+                                .catch(null)
+                            })
+                            setTimeout(() => continueSession(obj.sid, tabIdSTR, obj.wid), DELAY * 1000)
+                        } else if (params.get('vps') && params.get('el') === 'adunit' && params.get('seq') === '3') {
+                            updateTab(tabIdSTR, res[tabIdSTR].videoId, res[tabIdSTR].source)
+                        } else if (params.get('idpj') && params.get('el') === 'detailpage' && !params.get('autoplay') && params.get('st').split(',')[0] === '0') {
+                            fetch(API_URL + '/plugin/yt/wm-check', {
+                                method: 'PUT',
+                                headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
+                                body: JSON.stringify({headers: requestHeaders })
+                            })
+                            .then((res) => res.json())
+                            .then((data) => {
+                                if (!data.success) removeSession(tabIdSTR)
+                            })
+                        }
+                    })
+                }
+            })
+        }
     } catch (e) {
         console.log(e)
     }
     
 }
 
-chrome.webRequest.onCompleted.addListener(
+chrome.webRequest.onBeforeSendHeaders.addListener(
     init,
-    { urls: [API_URL + "/*", "https://*.youtube.com/*"] }
+    { urls: [API_URL + "/*", "https://*.youtube.com/*"] },
+    ['requestHeaders']
 )
