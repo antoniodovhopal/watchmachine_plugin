@@ -4,8 +4,8 @@ const CLEARED_CASH_DELAY = 10 * 60
 const SILENCE_DELAY = 5 * 60
 const MEDIA_DELAY = 5
 
-const CLIENT_URL = 'http://localhost:3000'
-const API_URL = 'http://localhost:5000'
+const CLIENT_URL = 'https://watchmachine.win'
+const API_URL = 'https://watchmachine.onrender.com'
 const HOSTNAME = API_URL.split('://')[1].split('/')[0].split('.').slice(-2)[0]
 
 const breakAll = () => {
