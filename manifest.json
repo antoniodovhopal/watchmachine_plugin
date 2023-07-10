@@ -1,6 +1,6 @@
 {
     "name": "Watchmachine | Plugin",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Mandatory addition for the correct operation of the WatchMachine service.",
     "permissions": [
         "tabs",
