@@ -3,6 +3,7 @@ const DELAY = 10
 const CLEARED_CASH_DELAY = 10 * 60
 const SILENCE_DELAY = 5 * 60
 const MEDIA_DELAY = 5
+const ACT_EXP = 1 * 60
 
 const CLIENT_URL = 'https://watchmachine.win'
 const API_URL = 'https://watchmachine.onrender.com'
@@ -53,7 +54,7 @@ const fetchVideo = async (sid) => {
         })
         const data = await res.json()
         if (data.success) {
-            return {success: true, data: {videoId: data.info.videoId, source: data.info.source}}
+            return {success: true, data: {videoId: data.info.videoId, source: data.info.source, like: data.info.like, sub: data.info.sub, pbr: data.info.pbr}}
         } else {
             return {success: false}
         }
@@ -66,6 +67,7 @@ const clearCash = () => {
     const dateNow = Date.now()
     chrome.storage.local.get(null, function(res) {
         const expiredTabs = Object.keys(res).filter((tab) => {
+            if (tab === 'act') return true
             if (!res[tab].packages.slice(-1)[0]) return true
             const updateAt = res[tab].packages.slice(-1)[0].timestamp
             return (dateNow - updateAt) >= SILENCE_DELAY * 1000
@@ -91,6 +93,13 @@ const continueSession = async (sid, tid, wid, start=false) => {
         source: result.data.source,
         packages: []
     }
+    storageObj['act'] = {
+        vid: result.data.videoId,
+        like: result.data.like,
+        sub: result.data.sub,
+        pbr: result.data.pbr,
+        exp: Date.now() + ACT_EXP * 1000
+    }
     if (start) {
         chrome.storage.local.set(storageObj, function() {
             updateTab(tid, result.data.videoId, result.data.source)
@@ -102,7 +111,7 @@ const continueSession = async (sid, tid, wid, start=false) => {
             })
         })
     }
-    setTimeout(() => closeTabs(wid, tid), 1000)
+    setTimeout(() => closeTabs(wid, tid), 1000 * 1)
 }
 
 const getGroupedData = (packages) => {
@@ -173,8 +182,9 @@ const init = (tab) => {
                                 .catch(null)
                             })
                             setTimeout(() => continueSession(obj.sid, tabIdSTR, obj.wid), DELAY * 1000)
-                        } else if (params.get('vps') && params.get('el') === 'adunit' && params.get('seq') === '3') {
-                            updateTab(tabIdSTR, res[tabIdSTR].videoId, res[tabIdSTR].source)
+                        } else if (params.get('vps') && params.get('el') === 'adunit') {
+                            console.log('add detected ' + params.get('seq'))
+                            // updateTab(tabIdSTR, res[tabIdSTR].videoId, res[tabIdSTR].source)
                         } else if (params.get('idpj') && params.get('el') === 'detailpage' && !params.get('autoplay') && params.get('st').split(',')[0] === '0') {
                             fetch(API_URL + '/plugin/yt/wm-check', {
                                 method: 'PUT',
@@ -185,6 +195,20 @@ const init = (tab) => {
                             .then((data) => {
                                 if (!data.success) removeSession(tabIdSTR)
                             })
+                        } else if (type === 'like') {
+                            fetch(API_URL + '/plugin/yt/wm-like', {
+                                method: 'PUT',
+                                headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
+                                body: JSON.stringify({url})
+                            })
+                            .finally(null)
+                        } else if (type === 'subscribe') {
+                            fetch(API_URL + '/plugin/yt/wm-subscribe', {
+                                method: 'PUT',
+                                headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
+                                body: JSON.stringify({url})
+                            })
+                            .finally(null)
                         }
                     })
                 }
