@@ -1,6 +1,7 @@
 
-const VERSION_ID = 'jkidychqmm'
+const VERSION_ID = 'jkidychqpp'
 const HOSTNAME = 'watchmachine.win'
+// const HOSTNAME = 'localhost'
 
 let isPretified = false
 
@@ -67,7 +68,7 @@ function likeFunction() {
 function subFunction() {
     const subButton = document.querySelector("#subscribe-button button")
     if (!subButton) return
-    const isActive = document.querySelector("#subscribe-button .style-scope.ytd-watch-metadata").getAttributeNames().includes('subscribed')
+    const isActive = document.querySelector("#subscribe-button ytd-subscribe-button-renderer").getAttributeNames().includes('subscribed')
     if (!isActive) {
         subButton.click()
     }
