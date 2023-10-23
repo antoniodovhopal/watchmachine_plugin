@@ -1,9 +1,9 @@
 
-const DELAY = 10
+const DELAY = 2.5
 const CLEARED_CASH_DELAY = 10 * 60
 const SILENCE_DELAY = 5 * 60
 const MEDIA_DELAY = 5
-const ACT_EXP = 1 * 60
+const SUB_EXP = 24 * 60 * 60 * 1000
 
 const CLIENT_URL = 'https://watchmachine.win'
 const API_URL = 'https://watchmachine.onrender.com'
@@ -38,12 +38,41 @@ const removeSession = (tid) => {
     })
 }
 
-const updateTab = (tid, vid, source) => {
-    chrome.tabs.update(parseInt(tid), {url: source})
-    setTimeout(() => {
-        chrome.tabs.sendMessage(parseInt(tid), {type: 'open', data: {vid}})
-    }, MEDIA_DELAY * 1000)
+const updateTab = (tid, data) => {
+    data['tid'] = parseInt(tid)
+    chrome.tabs.update(parseInt(tid), {url: data.link}, function (tab) {
+        chrome.tabs.onUpdated.addListener(function listener(updatedTabId, changeInfo) {
+            if (updatedTabId === tab.id && changeInfo.status === "complete") {
+                chrome.tabs.sendMessage(tab.id, { data }, function () {
+                    chrome.tabs.onUpdated.removeListener(listener);
+                })
+            }
+        })
+    })
 }
+
+const windowOpen = (tid, data) => {
+    chrome.tabs.onUpdated.addListener(function listener(updatedTabId, changeInfo) {
+        if (updatedTabId === tid) {
+            chrome.tabs.get(updatedTabId, function (tab) {
+                console.log('tab', tab.status, tab.url)
+                if (tab.status === "complete" && tab.url.includes(data.vid)) {
+                    chrome.tabs.sendMessage(tid, { data }, function () {
+                        chrome.tabs.onUpdated.removeListener(listener)
+                    })
+                }
+            })
+        }
+    })
+}
+
+chrome.runtime.onMessage.addListener(function (message) {
+    if (message.type === 'act') {
+        updateTab(parseInt(message.data.tid), message.data)
+    } else if (message.type === 'window') {
+        windowOpen(parseInt(message.data.tid), message.data)
+    }
+})
 
 const fetchVideo = async (sid) => {
     try {
@@ -56,7 +85,11 @@ const fetchVideo = async (sid) => {
         })
         const data = await res.json()
         if (data.success) {
-            return {success: true, data: {videoId: data.info.videoId, source: data.info.source, like: data.info.like, sub: data.info.sub, pbr: data.info.pbr}}
+            return {
+                success: true,
+                data: {
+                    videoId: data.info.videoId, link: data.info.link, type: data.info.type, params: data.info.params, pbr: data.info.pbr, sub: data.info.sub, len: data.info.len
+                }}
         } else {
             return {success: false}
         }
@@ -90,26 +123,28 @@ const continueSession = async (sid, tid, wid, start=false) => {
     }
     const storageObj = {}
     storageObj[tid] = {
-        sid, wid,
-        videoId: result.data.videoId,
-        source: result.data.source,
-        packages: []
+        sid, wid, vid: result.data.videoId,
+        packages: [],
+        len: result.data.len
     }
-    storageObj['act'] = {
+    // storageObj['act'] = {
+    const data = {
         vid: result.data.videoId,
-        like: result.data.like,
-        sub: result.data.sub,
         pbr: result.data.pbr,
-        exp: Date.now() + ACT_EXP * 1000
+        type: result.data.type,
+        params: result.data.params,
+        link: result.data.link,
+        sub: result.data.sub,
+        len: result.data.len
     }
     if (start) {
         chrome.storage.local.set(storageObj, function() {
-            updateTab(tid, result.data.videoId, result.data.source)
+            updateTab(tid, data)
         })
     } else {
         chrome.storage.local.remove([tid], function() {
             chrome.storage.local.set(storageObj, function() {
-                updateTab(tid, result.data.videoId, result.data.source)
+                updateTab(tid, data)
             })
         })
     }
@@ -138,7 +173,7 @@ const init = (tab) => {
         const tabIdSTR = tabId.toString()
 
         if (hostname === HOSTNAME && type === 'start') {
-            chrome.windows.create({url: 'https://youtube.com/', state: 'maximized'}, function(window) {
+            chrome.windows.create({url: 'https://www.youtube.com/', state: 'maximized'}, function(window) {
                 const windowId = window.id
                 const tabId = window.tabs[0].id
                 continueSession(params.get('sid'), tabId.toString(), windowId.toString(), true)
@@ -152,16 +187,10 @@ const init = (tab) => {
         }
         else if (hostname === 'youtube') {
             chrome.storage.local.get(null, function(res) {
-                if (type === 'playback' && params.get('euri') === CLIENT_URL + '/') {
-                    fetch(API_URL + '/plugin/yt', {
-                        method: 'POST',
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({params: paramsSTR})
-                    })
-                    .finally(() => {
-                        chrome.tabs.sendMessage(parseInt(tabIdSTR), {type: 'load'})
-                    })
-                } else if (!!res[tabIdSTR] && type.includes('unavailable_video')) {
+                if (type === 'qoe') {
+                    console.log("qoe", parseInt(params.get('cmt')?.split(':').slice(-1)[0]), res[tabIdSTR].len, res[tabIdSTR].sid, res[tabIdSTR].vid, paramsSTR)
+                }
+                if (!!res[tabIdSTR] && type.includes('unavailable_video')) {
                     continueSession(res[tabIdSTR].sid, tabIdSTR, res[tabIdSTR].wid)
                 } else if (!!res[tabIdSTR]) {
                     const request = {type, params: paramsSTR, timestamp: Date.now()}
@@ -172,7 +201,7 @@ const init = (tab) => {
                     const storageObj = {}
                     storageObj[tabIdSTR] = obj
                     chrome.storage.local.set(storageObj, function() {
-                        if (params.get('vps') && params.get('vps').split(':').slice(-1)[0] === 'EN' && params.get('el') === 'detailpage') {
+                        if (params.get('vps') && params.get('el') === 'detailpage' && params.get('docid') === obj.vid && ((parseInt(params.get('cmt')?.split(':')[0]) >= obj.len && params.get('vps').split(':').slice(-1)[0] !== 'N') || params.get('vps').split(':').slice(-1)[0] === 'EN')) {
                             chrome.tabs.update(parseInt(tabIdSTR), {url: 'https://youtube.com/'})
                             const groupedData = getGroupedData(obj.packages)
                             Object.keys(groupedData).forEach((gType) => {
@@ -184,10 +213,7 @@ const init = (tab) => {
                                 .catch(null)
                             })
                             setTimeout(() => continueSession(obj.sid, tabIdSTR, obj.wid), DELAY * 1000)
-                        } else if (params.get('vps') && params.get('el') === 'adunit') {
-                            console.log('add detected ' + params.get('seq'))
-                            // updateTab(tabIdSTR, res[tabIdSTR].videoId, res[tabIdSTR].source)
-                        } else if (params.get('idpj') && params.get('el') === 'detailpage' && !params.get('autoplay') && params.get('st').split(',')[0] === '0') {
+                        } else if (params.get('idpj') && params.get('el') === 'detailpage' && !params.get('autoplay') && params.get('st').split(',')[0] === '0' && params.get('docid') === obj.vid) {
                             fetch(API_URL + '/plugin/yt/wm-check', {
                                 method: 'PUT',
                                 headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
@@ -197,21 +223,22 @@ const init = (tab) => {
                             .then((data) => {
                                 if (!data.success) removeSession(tabIdSTR)
                             })
-                        } else if (type === 'like') {
-                            fetch(API_URL + '/plugin/yt/wm-like', {
-                                method: 'PUT',
-                                headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
-                                body: JSON.stringify({url})
-                            })
-                            .finally(null)
-                        } else if (type === 'subscribe') {
-                            fetch(API_URL + '/plugin/yt/wm-subscribe', {
-                                method: 'PUT',
-                                headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
-                                body: JSON.stringify({url})
-                            })
-                            .finally(null)
                         }
+                        // else if (type === 'like') {
+                        //     fetch(API_URL + '/plugin/yt/wm-like', {
+                        //         method: 'PUT',
+                        //         headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
+                        //         body: JSON.stringify({url})
+                        //     })
+                        //     .finally(null)
+                        // } else if (type === 'subscribe') {
+                        //     fetch(API_URL + '/plugin/yt/wm-subscribe', {
+                        //         method: 'PUT',
+                        //         headers: { "Content-Type": "application/json", "wm-sid": obj.sid },
+                        //         body: JSON.stringify({url})
+                        //     })
+                        //     .finally(null)
+                        // }
                     })
                 }
             })
